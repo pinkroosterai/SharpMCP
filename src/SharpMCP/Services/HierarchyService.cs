@@ -30,6 +30,10 @@ public sealed class HierarchyService
 
         foreach (var impl in implementations.OfType<INamedTypeSymbol>())
         {
+            // Only include types defined in source, not from referenced assemblies
+            if (!impl.Locations.Any(l => l.IsInSource))
+                continue;
+
             results.Add(BuildSymbolResult(impl, solutionDir));
         }
 
@@ -50,6 +54,10 @@ public sealed class HierarchyService
 
         foreach (var type in derived)
         {
+            // Only include types defined in source, not from referenced assemblies
+            if (!type.Locations.Any(l => l.IsInSource))
+                continue;
+
             results.Add(BuildSymbolResult(type, solutionDir));
         }
 
@@ -99,6 +107,9 @@ public sealed class HierarchyService
 
         foreach (var @override in overrides)
         {
+            if (!@override.Locations.Any(l => l.IsInSource))
+                continue;
+
             results.Add(BuildSymbolResult(@override, solutionDir));
         }
 

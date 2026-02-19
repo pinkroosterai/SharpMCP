@@ -164,6 +164,10 @@ public sealed class SymbolSearchService
 
             foreach (var type in SymbolResolver.GetAllNamedTypes(compilation))
             {
+                // Only include namespaces from source-defined types
+                if (!type.Locations.Any(l => l.IsInSource))
+                    continue;
+
                 var ns = type.ContainingNamespace?.ToDisplayString();
                 if (!string.IsNullOrEmpty(ns) && ns != "<global namespace>")
                     namespaces.Add(ns);
