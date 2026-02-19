@@ -18,16 +18,21 @@ public sealed class ReferencesService
 
     public async Task<List<ReferenceResult>> FindReferencesAsync(
         string solutionPath, string symbolName, string? typeName = null,
-        string? projectScope = null, DetailLevel detail = DetailLevel.Compact)
+        string? projectScope = null, DetailLevel detail = DetailLevel.Compact,
+        string mode = "all")
     {
-        var symbol = await _symbolResolver.ResolveSymbolAsync(solutionPath, symbolName, typeName);
-        return await FindReferencesForSymbolAsync(solutionPath, symbol, projectScope, detail);
+        return mode.ToLowerInvariant() switch
+        {
+            "callers" => await FindCallersInternalAsync(solutionPath, symbolName, typeName, detail),
+            _ => await FindReferencesInternalAsync(solutionPath, symbolName, typeName, projectScope, detail),
+        };
     }
 
-    private async Task<List<ReferenceResult>> FindReferencesForSymbolAsync(
-        string solutionPath, ISymbol symbol,
-        string? projectScope = null, DetailLevel detail = DetailLevel.Compact)
+    private async Task<List<ReferenceResult>> FindReferencesInternalAsync(
+        string solutionPath, string symbolName, string? typeName,
+        string? projectScope, DetailLevel detail)
     {
+        var symbol = await _symbolResolver.ResolveSymbolAsync(solutionPath, symbolName, typeName);
         var solution = await _workspaceManager.GetSolutionAsync(solutionPath);
         var solutionDir = Path.GetDirectoryName(Path.GetFullPath(solutionPath))!;
 
@@ -63,7 +68,6 @@ public sealed class ReferencesService
                     contextAfter = GetContextLines(sourceText, lineSpan.StartLinePosition.Line, 2);
                 }
 
-                // Try to find the containing symbol
                 var root = await document.GetSyntaxRootAsync();
                 var semanticModel = await document.GetSemanticModelAsync();
                 if (root != null && semanticModel != null)
@@ -89,12 +93,12 @@ public sealed class ReferencesService
         return results.OrderBy(r => r.FilePath).ThenBy(r => r.Line).ToList();
     }
 
-    public async Task<List<ReferenceResult>> FindCallersAsync(
-        string solutionPath, string methodName, string? typeName = null, DetailLevel detail = DetailLevel.Compact)
+    private async Task<List<ReferenceResult>> FindCallersInternalAsync(
+        string solutionPath, string symbolName, string? typeName, DetailLevel detail)
     {
         var solution = await _workspaceManager.GetSolutionAsync(solutionPath);
         var solutionDir = Path.GetDirectoryName(Path.GetFullPath(solutionPath))!;
-        var method = await _symbolResolver.ResolveMethodAsync(solutionPath, methodName, typeName);
+        var method = await _symbolResolver.ResolveMethodAsync(solutionPath, symbolName, typeName);
 
         var callers = await SymbolFinder.FindCallersAsync(method, solution);
         var results = new List<ReferenceResult>();
@@ -140,13 +144,6 @@ public sealed class ReferencesService
         }
 
         return results.OrderBy(r => r.FilePath).ThenBy(r => r.Line).ToList();
-    }
-
-    public async Task<List<ReferenceResult>> FindUsagesAsync(
-        string solutionPath, string typeName, DetailLevel detail = DetailLevel.Compact)
-    {
-        var typeSymbol = await _symbolResolver.ResolveTypeAsync(solutionPath, typeName);
-        return await FindReferencesForSymbolAsync(solutionPath, typeSymbol, detail: detail);
     }
 
     private static string GetLineText(Microsoft.CodeAnalysis.Text.SourceText sourceText, int lineNumber)

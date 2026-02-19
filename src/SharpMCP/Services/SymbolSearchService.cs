@@ -16,7 +16,9 @@ public sealed class SymbolSearchService
         _symbolResolver = symbolResolver;
     }
 
-    public async Task<List<SymbolResult>> FindSymbolsAsync(string solutionPath, string query, string? kind = null)
+    public async Task<List<SymbolResult>> FindSymbolsAsync(
+        string solutionPath, string query, string? kind = null,
+        bool exact = false, DetailLevel detail = DetailLevel.Compact)
     {
         var solution = await _workspaceManager.GetSolutionAsync(solutionPath);
         var solutionDir = Path.GetDirectoryName(Path.GetFullPath(solutionPath))!;
@@ -28,12 +30,17 @@ public sealed class SymbolSearchService
             var compilation = await project.GetCompilationAsync();
             if (compilation == null) continue;
 
-            var symbols = compilation.GetSymbolsWithName(
-                name => name.Contains(query, StringComparison.OrdinalIgnoreCase),
-                SymbolFilter.All);
+            var symbols = exact
+                ? compilation.GetSymbolsWithName(query, SymbolFilter.All)
+                : compilation.GetSymbolsWithName(
+                    name => name.Contains(query, StringComparison.OrdinalIgnoreCase),
+                    SymbolFilter.All);
 
             foreach (var symbol in symbols)
             {
+                if (!symbol.Locations.Any(l => l.IsInSource))
+                    continue;
+
                 if (kind != null && !string.Equals(SymbolFormatter.GetKindString(symbol), kind, StringComparison.OrdinalIgnoreCase))
                     continue;
 
@@ -44,7 +51,20 @@ public sealed class SymbolSearchService
                 if (!seen.Add(key))
                     continue;
 
-                results.Add(SymbolFormatter.BuildSymbolResult(symbol, solutionDir));
+                var result = SymbolFormatter.BuildSymbolResult(symbol, solutionDir);
+
+                if (detail == DetailLevel.Full)
+                {
+                    var docComment = SymbolFormatter.ExtractSummary(symbol.GetDocumentationCommentXml());
+                    var sourceBody = await SymbolFormatter.GetSourceBodyAsync(symbol);
+                    result = result with { DocComment = docComment, SourceBody = sourceBody };
+                }
+
+                results.Add(result);
+
+                // For exact match, return first source-defined match
+                if (exact)
+                    return results;
             }
         }
 
@@ -121,37 +141,6 @@ public sealed class SymbolSearchService
         return results;
     }
 
-    public async Task<SymbolResult?> GetSymbolInfoAsync(string solutionPath, string symbolName, DetailLevel detail = DetailLevel.Compact)
-    {
-        var solution = await _workspaceManager.GetSolutionAsync(solutionPath);
-        var solutionDir = Path.GetDirectoryName(Path.GetFullPath(solutionPath))!;
-
-        ISymbol? found = null;
-        foreach (var project in solution.Projects)
-        {
-            var compilation = await project.GetCompilationAsync();
-            if (compilation == null) continue;
-
-            var symbols = compilation.GetSymbolsWithName(symbolName, SymbolFilter.All);
-            found = symbols.FirstOrDefault(s => s.Locations.Any(l => l.IsInSource));
-            if (found != null) break;
-        }
-
-        if (found == null)
-            return null;
-
-        var result = SymbolFormatter.BuildSymbolResult(found, solutionDir);
-
-        if (detail == DetailLevel.Full)
-        {
-            var docComment = SymbolFormatter.ExtractSummary(found.GetDocumentationCommentXml());
-            var sourceBody = await SymbolFormatter.GetSourceBodyAsync(found);
-            result = result with { DocComment = docComment, SourceBody = sourceBody };
-        }
-
-        return result;
-    }
-
     public async Task<List<string>> ListNamespacesAsync(string solutionPath)
     {
         var solution = await _workspaceManager.GetSolutionAsync(solutionPath);
@@ -164,7 +153,6 @@ public sealed class SymbolSearchService
 
             foreach (var type in SymbolResolver.GetAllNamedTypes(compilation))
             {
-                // Only include namespaces from source-defined types
                 if (!type.Locations.Any(l => l.IsInSource))
                     continue;
 

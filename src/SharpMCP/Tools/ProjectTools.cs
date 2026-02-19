@@ -37,7 +37,7 @@ public sealed class ProjectTools
         }
     }
 
-    [McpServerTool(Name = "get_project_info"), Description("Get detailed metadata for a specific project (name, framework, output type, file count, references).")]
+    [McpServerTool(Name = "get_project_info"), Description("Get detailed metadata for a specific project including framework, output type, project references, and NuGet package references.")]
     public async Task<string> GetProjectInfo(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Project name within the solution")] string projectName)
@@ -45,46 +45,7 @@ public sealed class ProjectTools
         try
         {
             var info = await _projectService.GetProjectInfoAsync(solutionPath, projectName);
-            return _formatter.FormatProjectList([info], Path.GetFileName(solutionPath));
-        }
-        catch (Exception ex)
-        {
-            return $"Error: {ex.Message}";
-        }
-    }
-
-    [McpServerTool(Name = "list_project_references"), Description("List project-to-project references (dependency graph) for a project.")]
-    public async Task<string> ListProjectReferences(
-        [Description("Path to .sln or .csproj file")] string solutionPath,
-        [Description("Project name within the solution")] string projectName)
-    {
-        try
-        {
-            var refs = await _projectService.ListProjectReferencesAsync(solutionPath, projectName);
-            if (refs.Count == 0)
-                return $"{projectName} has no project references.";
-
-            return $"{projectName} references:\n" + string.Join("\n", refs.Select(r => $"  - {r}"));
-        }
-        catch (Exception ex)
-        {
-            return $"Error: {ex.Message}";
-        }
-    }
-
-    [McpServerTool(Name = "list_package_references"), Description("List NuGet package references for a project (name + version).")]
-    public async Task<string> ListPackageReferences(
-        [Description("Path to .sln or .csproj file")] string solutionPath,
-        [Description("Project name within the solution")] string projectName)
-    {
-        try
-        {
-            var packages = await _projectService.ListPackageReferencesAsync(solutionPath, projectName);
-            if (packages.Count == 0)
-                return $"{projectName} has no NuGet package references.";
-
-            return $"Packages in {projectName}:\n" +
-                string.Join("\n", packages.Select(p => $"  {p.Name} {p.Version}"));
+            return FormatDetailedProjectInfo(info);
         }
         catch (Exception ex)
         {
@@ -131,5 +92,42 @@ public sealed class ProjectTools
         {
             return $"Error: {ex.Message}";
         }
+    }
+
+    private static string FormatDetailedProjectInfo(ProjectInfo info)
+    {
+        var lines = new List<string>
+        {
+            $"Project: {info.Name}",
+            $"  Framework: {info.TargetFramework}",
+            $"  Output: {info.OutputType}",
+            $"  Source files: {info.SourceFileCount}",
+        };
+
+        lines.Add("");
+        if (info.ProjectReferences.Count > 0)
+        {
+            lines.Add($"  Project references ({info.ProjectReferences.Count}):");
+            foreach (var r in info.ProjectReferences)
+                lines.Add($"    {r}");
+        }
+        else
+        {
+            lines.Add("  Project references: (none)");
+        }
+
+        lines.Add("");
+        if (info.PackageReferences.Count > 0)
+        {
+            lines.Add($"  Package references ({info.PackageReferences.Count}):");
+            foreach (var p in info.PackageReferences)
+                lines.Add($"    {p.Name} {p.Version}");
+        }
+        else
+        {
+            lines.Add("  Package references: (none)");
+        }
+
+        return string.Join("\n", lines);
     }
 }

@@ -18,42 +18,25 @@ public sealed class HierarchyTools
         _formatter = formatter;
     }
 
-    [McpServerTool(Name = "find_implementations"), Description("Find all classes that implement a given interface. Works across all projects in the solution.")]
-    public async Task<string> FindImplementations(
+    [McpServerTool(Name = "find_derived_types"), Description("Find classes implementing an interface or inheriting from a base class. Automatically detects whether the type is an interface or class.")]
+    public async Task<string> FindDerivedTypes(
         [Description("Path to .sln or .csproj file")] string solutionPath,
-        [Description("Interface name (e.g., 'IOrderService')")] string interfaceName,
+        [Description("Interface or base class name")] string typeName,
         [Description("'compact' (default) or 'full' for detailed output")] string detail = "compact")
     {
         try
         {
             var detailLevel = DetailLevelExtensions.Parse(detail);
-            var results = await _hierarchyService.FindImplementationsAsync(solutionPath, interfaceName, detailLevel);
+            var (results, typeKind) = await _hierarchyService.FindDerivedTypesAsync(solutionPath, typeName, detailLevel);
+
             if (results.Count == 0)
-                return $"No implementations found for '{interfaceName}'.";
+                return $"No derived types found for '{typeName}'.";
 
-            return $"Classes implementing {interfaceName} ({results.Count}):\n" +
-                _formatter.FormatSymbolList(results, detailLevel);
-        }
-        catch (Exception ex)
-        {
-            return $"Error: {ex.Message}";
-        }
-    }
+            var header = typeKind == "interface"
+                ? $"Classes implementing {typeName}"
+                : $"Classes extending {typeName}";
 
-    [McpServerTool(Name = "find_subclasses"), Description("Find all classes that inherit from a given base class.")]
-    public async Task<string> FindSubclasses(
-        [Description("Path to .sln or .csproj file")] string solutionPath,
-        [Description("Base class name (e.g., 'BaseController')")] string baseClassName,
-        [Description("'compact' (default) or 'full' for detailed output")] string detail = "compact")
-    {
-        try
-        {
-            var detailLevel = DetailLevelExtensions.Parse(detail);
-            var results = await _hierarchyService.FindSubclassesAsync(solutionPath, baseClassName, detailLevel);
-            if (results.Count == 0)
-                return $"No subclasses found for '{baseClassName}'.";
-
-            return $"Classes extending {baseClassName} ({results.Count}):\n" +
+            return $"{header} ({results.Count}):\n" +
                 _formatter.FormatSymbolList(results, detailLevel);
         }
         catch (Exception ex)

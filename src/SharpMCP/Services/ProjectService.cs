@@ -40,6 +40,7 @@ public sealed class ProjectService
         var projectRefs = project.ProjectReferences
             .Select(r => solution.GetProject(r.ProjectId)?.Name ?? "unknown")
             .ToList();
+        var packageRefs = ParsePackageReferences(doc);
 
         return new Models.ProjectInfo(
             Name: project.Name,
@@ -47,43 +48,9 @@ public sealed class ProjectService
             TargetFramework: ParseTargetFramework(doc),
             OutputType: ParseOutputType(doc),
             SourceFileCount: project.Documents.Count(),
-            ProjectReferences: projectRefs
+            ProjectReferences: projectRefs,
+            PackageReferences: packageRefs
         );
-    }
-
-    public async Task<List<string>> ListProjectReferencesAsync(string solutionPath, string projectName)
-    {
-        var solution = await _workspaceManager.GetSolutionAsync(solutionPath);
-        var project = await _workspaceManager.GetProjectAsync(solutionPath, projectName);
-
-        return project.ProjectReferences
-            .Select(r => solution.GetProject(r.ProjectId)?.Name ?? "unknown")
-            .ToList();
-    }
-
-    public async Task<List<PackageInfo>> ListPackageReferencesAsync(string solutionPath, string projectName)
-    {
-        var project = await _workspaceManager.GetProjectAsync(solutionPath, projectName);
-
-        if (project.FilePath == null)
-            return [];
-
-        // Parse .csproj XML for PackageReference items (more reliable for name+version)
-        try
-        {
-            var doc = XDocument.Load(project.FilePath);
-            var packages = doc.Descendants("PackageReference")
-                .Select(pr => new PackageInfo(
-                    Name: pr.Attribute("Include")?.Value ?? "unknown",
-                    Version: pr.Attribute("Version")?.Value ?? pr.Element("Version")?.Value ?? "unknown"
-                ))
-                .ToList();
-            return packages;
-        }
-        catch
-        {
-            return [];
-        }
     }
 
     public async Task<List<string>> ListSourceFilesAsync(string solutionPath, string projectName)
@@ -135,6 +102,24 @@ public sealed class ProjectService
             .ThenBy(d => d.FilePath)
             .ThenBy(d => d.Line)
             .ToList();
+    }
+
+    private static List<PackageInfo> ParsePackageReferences(XDocument? doc)
+    {
+        if (doc == null) return [];
+        try
+        {
+            return doc.Descendants("PackageReference")
+                .Select(pr => new PackageInfo(
+                    Name: pr.Attribute("Include")?.Value ?? "unknown",
+                    Version: pr.Attribute("Version")?.Value ?? pr.Element("Version")?.Value ?? "unknown"
+                ))
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private static XDocument? TryLoadProjectXml(Project project)

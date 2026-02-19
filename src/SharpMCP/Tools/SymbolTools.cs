@@ -18,17 +18,18 @@ public sealed class SymbolTools
         _formatter = formatter;
     }
 
-    [McpServerTool(Name = "find_symbol"), Description("Search for symbols by name (supports substring match). Filter by kind: class, interface, method, property, field, enum, struct, event.")]
+    [McpServerTool(Name = "find_symbol"), Description("Search for symbols by name. Use exact=true for precise lookup with detailed info, or substring matching (default) for broader search.")]
     public async Task<string> FindSymbol(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Symbol name or substring to search for")] string query,
         [Description("Optional kind filter: class, interface, method, property, field, enum, struct, event")] string? kind = null,
-        [Description("'compact' (default) or 'full' for detailed output")] string detail = "compact")
+        [Description("true = exact name match, false = substring match (default)")] bool exact = false,
+        [Description("'compact' (default) or 'full' for detailed output including source and docs")] string detail = "compact")
     {
         try
         {
             var detailLevel = DetailLevelExtensions.Parse(detail);
-            var results = await _symbolService.FindSymbolsAsync(solutionPath, query, kind);
+            var results = await _symbolService.FindSymbolsAsync(solutionPath, query, kind, exact, detailLevel);
             if (results.Count == 0)
                 return $"No symbols found matching '{query}'.";
 
@@ -79,27 +80,6 @@ public sealed class SymbolTools
 
             return $"Members of {typeName} ({results.Count}):\n" +
                 _formatter.FormatSymbolList(results, detailLevel);
-        }
-        catch (Exception ex)
-        {
-            return $"Error: {ex.Message}";
-        }
-    }
-
-    [McpServerTool(Name = "get_symbol_info"), Description("Get detailed information about a specific symbol (signature, location, documentation, attributes).")]
-    public async Task<string> GetSymbolInfo(
-        [Description("Path to .sln or .csproj file")] string solutionPath,
-        [Description("Symbol name to look up")] string symbolName,
-        [Description("'compact' (default) or 'full' for detailed output")] string detail = "compact")
-    {
-        try
-        {
-            var detailLevel = DetailLevelExtensions.Parse(detail);
-            var result = await _symbolService.GetSymbolInfoAsync(solutionPath, symbolName, detailLevel);
-            if (result == null)
-                return $"Symbol '{symbolName}' not found.";
-
-            return _formatter.FormatSymbolList([result], detailLevel);
         }
         catch (Exception ex)
         {

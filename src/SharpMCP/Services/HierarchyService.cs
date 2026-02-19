@@ -16,52 +16,41 @@ public sealed class HierarchyService
         _symbolResolver = symbolResolver;
     }
 
-    public async Task<List<SymbolResult>> FindImplementationsAsync(string solutionPath, string interfaceName, DetailLevel detail = DetailLevel.Compact)
+    public async Task<(List<SymbolResult> Results, string TypeKind)> FindDerivedTypesAsync(
+        string solutionPath, string typeName, DetailLevel detail = DetailLevel.Compact)
     {
         var solution = await _workspaceManager.GetSolutionAsync(solutionPath);
         var solutionDir = Path.GetDirectoryName(Path.GetFullPath(solutionPath))!;
-        var interfaceSymbol = await _symbolResolver.ResolveTypeAsync(solutionPath, interfaceName);
+        var resolvedType = await _symbolResolver.ResolveTypeAsync(solutionPath, typeName);
 
-        if (interfaceSymbol.TypeKind != TypeKind.Interface)
-            throw new ArgumentException($"'{interfaceName}' is not an interface (it's a {interfaceSymbol.TypeKind}).");
+        IEnumerable<INamedTypeSymbol> derived;
+        string typeKind;
 
-        var implementations = await SymbolFinder.FindImplementationsAsync(interfaceSymbol, solution);
-        var results = new List<SymbolResult>();
-
-        foreach (var impl in implementations.OfType<INamedTypeSymbol>())
+        if (resolvedType.TypeKind == TypeKind.Interface)
         {
-            // Only include types defined in source, not from referenced assemblies
-            if (!impl.Locations.Any(l => l.IsInSource))
-                continue;
-
-            results.Add(BuildSymbolResult(impl, solutionDir));
+            var implementations = await SymbolFinder.FindImplementationsAsync(resolvedType, solution);
+            derived = implementations.OfType<INamedTypeSymbol>();
+            typeKind = "interface";
+        }
+        else if (resolvedType.TypeKind == TypeKind.Class)
+        {
+            derived = await SymbolFinder.FindDerivedClassesAsync(resolvedType, solution);
+            typeKind = "class";
+        }
+        else
+        {
+            throw new ArgumentException($"'{typeName}' is not an interface or class (it's a {resolvedType.TypeKind}).");
         }
 
-        return results.OrderBy(r => r.FilePath).ThenBy(r => r.Line).ToList();
-    }
-
-    public async Task<List<SymbolResult>> FindSubclassesAsync(string solutionPath, string baseClassName, DetailLevel detail = DetailLevel.Compact)
-    {
-        var solution = await _workspaceManager.GetSolutionAsync(solutionPath);
-        var solutionDir = Path.GetDirectoryName(Path.GetFullPath(solutionPath))!;
-        var baseClass = await _symbolResolver.ResolveTypeAsync(solutionPath, baseClassName);
-
-        if (baseClass.TypeKind != TypeKind.Class)
-            throw new ArgumentException($"'{baseClassName}' is not a class (it's a {baseClass.TypeKind}).");
-
-        var derived = await SymbolFinder.FindDerivedClassesAsync(baseClass, solution);
         var results = new List<SymbolResult>();
-
-        foreach (var type in derived)
+        foreach (var symbol in derived)
         {
-            // Only include types defined in source, not from referenced assemblies
-            if (!type.Locations.Any(l => l.IsInSource))
+            if (!symbol.Locations.Any(l => l.IsInSource))
                 continue;
-
-            results.Add(BuildSymbolResult(type, solutionDir));
+            results.Add(BuildSymbolResult(symbol, solutionDir));
         }
 
-        return results.OrderBy(r => r.FilePath).ThenBy(r => r.Line).ToList();
+        return (results.OrderBy(r => r.FilePath).ThenBy(r => r.Line).ToList(), typeKind);
     }
 
     public async Task<TypeHierarchyResult> GetTypeHierarchyAsync(string solutionPath, string typeName)
