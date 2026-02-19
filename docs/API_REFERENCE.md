@@ -1,6 +1,6 @@
 # SharpMCP API Reference
 
-Complete reference for all 26 MCP tools. All tools communicate via stdio MCP transport and return plain text (not JSON).
+Complete reference for all 20 MCP tools. All tools communicate via stdio MCP transport and return plain text (not JSON).
 
 ## Common Parameters
 
@@ -38,38 +38,29 @@ Solution: MySolution (3 projects)
 
 ### `get_project_info`
 
-Get detailed metadata for a specific project.
+Get detailed metadata for a specific project, including project references and NuGet package references.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `solutionPath` | string | yes | — | Path to .sln or .csproj |
 | `projectName` | string | yes | — | Project name within solution |
 
----
+**Output format:**
+```
+Project: MyService
+  Framework: net9.0
+  Output: Exe
+  Source files: 42
 
-### `list_project_references`
+  Project references (2):
+    MyLib
+    SharedModels
 
-List project-to-project references (dependency graph).
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `solutionPath` | string | yes | — | Path to .sln or .csproj |
-| `projectName` | string | yes | — | Project name |
-
-**Output:** One referenced project name per line.
-
----
-
-### `list_package_references`
-
-List NuGet packages for a project.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `solutionPath` | string | yes | — | Path to .sln or .csproj |
-| `projectName` | string | yes | — | Project name |
-
-**Output:** `PackageName Version` per line. Parsed from `.csproj` XML.
+  Package references (3):
+    Microsoft.Extensions.Hosting 9.0.1
+    Newtonsoft.Json 13.0.3
+    Serilog 4.0.0
+```
 
 ---
 
@@ -108,6 +99,7 @@ Search for symbols by name (case-insensitive substring match).
 | `solutionPath` | string | yes | — | Path to .sln or .csproj |
 | `query` | string | yes | — | Symbol name or substring |
 | `kind` | string | no | null | Filter: class, interface, method, property, field, enum, struct, event |
+| `exact` | bool | no | false | true = exact name match (like old get_symbol_info), false = substring match |
 | `detail` | string | no | "compact" | "compact" or "full" |
 
 **Output (compact):**
@@ -145,18 +137,6 @@ List all members of a specific type.
 
 ---
 
-### `get_symbol_info`
-
-Get detailed information about a specific symbol.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `solutionPath` | string | yes | — | Path to .sln or .csproj |
-| `symbolName` | string | yes | — | Symbol name |
-| `detail` | string | no | "compact" | "compact" or "full" |
-
----
-
 ### `list_namespaces`
 
 List all namespaces in a solution (source-defined only, excludes metadata).
@@ -169,29 +149,17 @@ List all namespaces in a solution (source-defined only, excludes metadata).
 
 ## Type Hierarchy Tools
 
-### `find_implementations`
+### `find_derived_types`
 
-Find all classes implementing an interface.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `solutionPath` | string | yes | — | Path to .sln or .csproj |
-| `interfaceName` | string | yes | — | Interface name (e.g., "IOrderService") |
-| `detail` | string | no | "compact" | "compact" or "full" |
-
-Uses `SymbolFinder.FindImplementationsAsync`. Results filtered to source-defined types only.
-
----
-
-### `find_subclasses`
-
-Find all classes inheriting from a base class.
+Find classes implementing an interface or inheriting from a base class. Automatically detects whether the type is an interface or class.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `solutionPath` | string | yes | — | Path to .sln or .csproj |
-| `baseClassName` | string | yes | — | Base class name |
+| `typeName` | string | yes | — | Interface or base class name |
 | `detail` | string | no | "compact" | "compact" or "full" |
+
+If `typeName` is an interface, uses `SymbolFinder.FindImplementationsAsync`. If it's a class, uses `SymbolFinder.FindDerivedClassesAsync`. Returns error for other type kinds.
 
 ---
 
@@ -232,13 +200,14 @@ Validates the method is virtual, abstract, or override before searching.
 
 ### `find_references`
 
-Find all locations where a symbol is referenced.
+Find all references to a symbol. Use mode='callers' for method call sites only, or mode='usages' for type usage sites.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `solutionPath` | string | yes | — | Path to .sln or .csproj |
 | `symbolName` | string | yes | — | Symbol name |
 | `typeName` | string | no | null | Containing type (disambiguation) |
+| `mode` | string | no | "all" | "all", "callers" (method call sites), or "usages" (type usage sites) |
 | `projectScope` | string | no | null | Restrict to a project |
 | `detail` | string | no | "compact" | "compact" or "full" (full adds context lines) |
 
@@ -248,31 +217,6 @@ Find all locations where a symbol is referenced.
 ```
 
 **Output (full):** Adds 2 lines of context before and after each reference.
-
----
-
-### `find_callers`
-
-Find all call sites for a method.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `solutionPath` | string | yes | — | Path to .sln or .csproj |
-| `methodName` | string | yes | — | Method name |
-| `typeName` | string | no | null | Containing type (disambiguation) |
-| `detail` | string | no | "compact" | "compact" or "full" |
-
----
-
-### `find_usages`
-
-Find where a type is used (parameters, return types, fields, variables).
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `solutionPath` | string | yes | — | Path to .sln or .csproj |
-| `typeName` | string | yes | — | Type name |
-| `detail` | string | no | "compact" | "compact" or "full" |
 
 ---
 

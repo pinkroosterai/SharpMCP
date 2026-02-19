@@ -1,6 +1,6 @@
 # SharpMCP Architecture
 
-Roslyn-powered MCP server for C# code intelligence. Provides 26 tools that let LLMs query codebase structure without reading entire files.
+Roslyn-powered MCP server for C# code intelligence. Provides 20 tools that let LLMs query codebase structure without reading entire files.
 
 ## System Overview
 
@@ -9,7 +9,7 @@ Roslyn-powered MCP server for C# code intelligence. Provides 26 tools that let L
   LLM Client  ─────────────────────────►  MCP Server (Program.cs)
                                                 │
                                          ┌──────┴──────┐
-                                         │  Tool Layer  │  7 classes, 26 tools
+                                         │  Tool Layer  │  7 classes, 20 tools
                                          │  (thin MCP   │  Parse params, catch errors,
                                          │   wrappers)  │  format output
                                          └──────┬──────┘
@@ -76,7 +76,7 @@ Build().RunAsync()
 
 Critical: `MSBuildLocator.RegisterDefaults()` must execute before any Roslyn types are loaded into the CLR. Moving this line will cause runtime failures.
 
-### 2. Tool Layer — 7 Classes, 26 Tools
+### 2. Tool Layer — 7 Classes, 20 Tools
 
 Thin MCP wrappers. Every tool method follows the same pattern:
 
@@ -101,7 +101,7 @@ public async Task<string> ToolName(
 ```
 
 **Cross-cutting patterns:**
-- 25 of 26 tools require `solutionPath`; exception: `get_file_content` takes bare `filePath`
+- 19 of 20 tools require `solutionPath`; exception: `get_file_content` takes bare `filePath`
 - 14 tools accept `detail` parameter ("compact" | "full")
 - 5 tools accept optional `typeName` for disambiguation
 - Tools never throw — all exceptions become `"Error: ..."` strings
@@ -160,32 +160,30 @@ API:
 
 Matches on both short name and fully qualified name. Throws with candidate list on ambiguity. `GetAllNamedTypes` recursively traverses all namespaces including nested types.
 
-#### SymbolSearchService (179 LOC) — Search + browse
+#### SymbolSearchService (155 LOC) — Search + browse
 
 ```
 API:
-  FindSymbolsAsync(solutionPath, query, kind?) → List<SymbolResult>
+  FindSymbolsAsync(solutionPath, query, kind?, exact?, detail?) → List<SymbolResult>
   GetFileSymbolsAsync(solutionPath, filePath, depth) → List<SymbolResult>
   GetTypeMembersAsync(solutionPath, typeName, detail) → List<SymbolResult>
-  GetSymbolInfoAsync(solutionPath, symbolName, detail) → SymbolResult?
   ListNamespacesAsync(solutionPath) → List<string>
 ```
 
-Case-insensitive substring search. Deduplicates across projects via `HashSet<string>` on `"displayString|kind"`. Filters `IsImplicitlyDeclared` and compiler-generated members (`name.StartsWith("<")`). Source-only filter on namespaces.
+Case-insensitive substring search (or exact match when `exact=true`). When `exact=true`, returns first source-defined match with full detail. Deduplicates across projects via `HashSet<string>` on `"displayString|kind"`. Filters `IsImplicitlyDeclared` and compiler-generated members (`name.StartsWith("<")`). `IsInSource` filter applied to all symbol results.
 
-#### ProjectService (162 LOC) — Project metadata
+#### ProjectService (140 LOC) — Project metadata
 
 ```
 API:
   ListProjectsAsync(solutionPath) → List<ProjectInfo>
-  GetProjectInfoAsync(solutionPath, projectName) → ProjectInfo
-  ListProjectReferencesAsync(solutionPath, projectName) → List<string>
-  ListPackageReferencesAsync(solutionPath, projectName) → List<PackageInfo>
+  GetProjectInfoAsync(solutionPath, projectName) → ProjectInfo  (includes PackageReferences)
   ListSourceFilesAsync(solutionPath, projectName) → List<string>
   GetDiagnosticsAsync(solutionPath, projectName?) → List<DiagnosticInfo>
+  private ParsePackageReferences(XDocument?) → List<PackageInfo>
 ```
 
-Parses `.csproj` XML via `XDocument.Load` for framework/output type. Diagnostics filtered to Warning+ severity, sorted errors-first.
+Parses `.csproj` XML via `XDocument.Load` for framework/output type. `GetProjectInfoAsync` returns `ProjectInfo` with `PackageReferences` field populated by `ParsePackageReferences`. Diagnostics filtered to Warning+ severity, sorted errors-first.
 
 #### SourceService (59 LOC) — Source retrieval
 
@@ -197,28 +195,28 @@ API:
 
 Uses `DeclaringSyntaxReferences` → `GetSyntaxAsync()` → `ToFullString()`. File content returns line-numbered format with 5MB guard and clamped line ranges.
 
-#### HierarchyService (121 LOC) — Type relationships
+#### HierarchyService (108 LOC) — Type relationships
 
 ```
 API:
-  FindImplementationsAsync(solutionPath, interfaceName, detail) → List<SymbolResult>
-  FindSubclassesAsync(solutionPath, baseClassName, detail) → List<SymbolResult>
+  FindDerivedTypesAsync(solutionPath, typeName, detail) → (List<SymbolResult>, string TypeKind)
   GetTypeHierarchyAsync(solutionPath, typeName) → TypeHierarchyResult
   FindOverridesAsync(solutionPath, typeName, methodName, detail) → List<SymbolResult>
 ```
 
-Uses `SymbolFinder.FindImplementationsAsync`, `FindDerivedClassesAsync`, `FindOverridesAsync`. All results filtered to `IsInSource` to exclude metadata symbols. Validates input type kind before searching.
+`FindDerivedTypesAsync` replaces `FindImplementationsAsync` and `FindSubclassesAsync`. Auto-detects interface vs class via `TypeKind` and dispatches to `SymbolFinder.FindImplementationsAsync` or `FindDerivedClassesAsync` accordingly. All results filtered to `IsInSource` to exclude metadata symbols.
 
-#### ReferencesService (173 LOC) — Reference tracking
+#### ReferencesService (155 LOC) — Reference tracking
 
 ```
 API:
-  FindReferencesAsync(solutionPath, symbolName, typeName?, projectScope?, detail) → List<ReferenceResult>
-  FindCallersAsync(solutionPath, methodName, typeName?, detail) → List<ReferenceResult>
-  FindUsagesAsync(solutionPath, typeName, detail) → List<ReferenceResult>
+  FindReferencesAsync(solutionPath, symbolName, typeName?, projectScope?, detail, mode) → List<ReferenceResult>
+    mode: "all" (default) | "callers" | "usages"
+  private FindReferencesInternalAsync(...)  → SymbolFinder.FindReferencesAsync path
+  private FindCallersInternalAsync(...)     → SymbolFinder.FindCallersAsync path
 ```
 
-Uses `SymbolFinder.FindReferencesAsync` and `FindCallersAsync`. Full detail adds 2-line context before/after. Each result includes `ContainingSymbol` via `GetEnclosingSymbol`.
+Single public method with `mode` parameter dispatches to internal implementations. Full detail adds 2-line context before/after. Each result includes `ContainingSymbol` via `GetEnclosingSymbol`.
 
 #### RenameService (181 LOC) — Symbol renaming
 
@@ -281,7 +279,7 @@ Text-based replacement (not Roslyn solution mutation). Modifies declaration firs
 | Type | Fields |
 |------|--------|
 | `DetailLevel` (enum) | `Compact`, `Full` |
-| `ProjectInfo` (record) | Name, FilePath, TargetFramework, OutputType, SourceFileCount, ProjectReferences |
+| `ProjectInfo` (record) | Name, FilePath, TargetFramework, OutputType, SourceFileCount, ProjectReferences, PackageReferences |
 | `PackageInfo` (record) | Name, Version |
 | `DiagnosticInfo` (record) | Id, Severity, Message, FilePath, Line |
 | `SymbolResult` (record) | Name, FullyQualifiedName, Kind, Signature, FilePath, Line, DocComment?, SourceBody? |
@@ -295,9 +293,7 @@ Text-based replacement (not Roslyn solution mutation). Modifies declaration firs
 | Tool | Parameters | Returns |
 |------|-----------|---------|
 | `list_projects` | solutionPath | Project table: name, framework, output type, file count, refs |
-| `get_project_info` | solutionPath, projectName | Single project detail |
-| `list_project_references` | solutionPath, projectName | Project → project dependency list |
-| `list_package_references` | solutionPath, projectName | NuGet name + version list |
+| `get_project_info` | solutionPath, projectName | Single project detail (includes package references) |
 | `list_source_files` | solutionPath, projectName | .cs file path list |
 | `get_diagnostics` | solutionPath, projectName? | Errors + warnings (all projects if name omitted) |
 
@@ -305,18 +301,16 @@ Text-based replacement (not Roslyn solution mutation). Modifies declaration firs
 
 | Tool | Parameters | Returns |
 |------|-----------|---------|
-| `find_symbol` | solutionPath, query, kind?, detail | Matching symbols (substring, case-insensitive) |
+| `find_symbol` | solutionPath, query, kind?, exact?, detail | Matching symbols (substring or exact match) |
 | `get_file_symbols` | solutionPath, filePath, depth?, detail | Symbols in file (depth=1 for members) |
 | `get_type_members` | solutionPath, typeName, detail | Methods, properties, fields, events of a type |
-| `get_symbol_info` | solutionPath, symbolName, detail | Full symbol details (signature, docs, attrs) |
 | `list_namespaces` | solutionPath | All source-defined namespaces |
 
 ### Type Hierarchy — `HierarchyTools.cs`
 
 | Tool | Parameters | Returns |
 |------|-----------|---------|
-| `find_implementations` | solutionPath, interfaceName, detail | Classes implementing interface |
-| `find_subclasses` | solutionPath, baseClassName, detail | Classes inheriting from base |
+| `find_derived_types` | solutionPath, typeName, detail | Implementations (interface) or subclasses (class), auto-detected |
 | `get_type_hierarchy` | solutionPath, typeName | Full base chain + all interfaces |
 | `find_overrides` | solutionPath, typeName, methodName, detail | Override locations |
 
@@ -324,9 +318,7 @@ Text-based replacement (not Roslyn solution mutation). Modifies declaration firs
 
 | Tool | Parameters | Returns |
 |------|-----------|---------|
-| `find_references` | solutionPath, symbolName, typeName?, projectScope?, detail | All reference locations |
-| `find_callers` | solutionPath, methodName, typeName?, detail | Method call sites |
-| `find_usages` | solutionPath, typeName, detail | Type usage locations |
+| `find_references` | solutionPath, symbolName, typeName?, projectScope?, detail, mode? | Reference locations (mode: "all", "callers", "usages") |
 
 ### Source — `SourceTools.cs`
 
@@ -384,7 +376,7 @@ Text-based replacement (not Roslyn solution mutation). Modifies declaration firs
 |-----------|-------|-----|---------|
 | `Program.cs` | 1 | 40 | Entry point + DI |
 | `Tools/` | 7 | 652 | MCP tool definitions |
-| `Services/` | 12 | 2,814 | Business logic + smell detection |
+| `Services/` | 12 | 2,737 | Business logic + smell detection |
 | `Formatting/` | 2 | 318 | Output formatting |
 | `Models/` | 5 | 65 | Shared DTOs |
-| **Total** | **27** | **4,011** | |
+| **Total** | **27** | **3,934** | |

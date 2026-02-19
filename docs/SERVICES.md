@@ -88,19 +88,27 @@ Recursive traversal: global namespace → all namespace members → all type mem
 
 ## SymbolSearchService
 
-**File:** `Services/SymbolSearchService.cs` (179 LOC)
+**File:** `Services/SymbolSearchService.cs` (155 LOC)
 **Dependencies:** WorkspaceManager, SymbolResolver
 **State:** None
 
 ### Find Symbols
 
+`FindSymbolsAsync` now accepts `exact` and `detail` parameters. When `exact=true`, it performs an exact name match and returns the first source-defined match with full detail (replacing the old `GetSymbolInfoAsync` method). The `IsInSource` filter is now applied to all symbol results.
+
 ```
-FindSymbolsAsync(path, "Manager", kind: "class")
+FindSymbolsAsync(path, "Manager", kind: "class", exact: false, detail: "compact")
   │
-  ├─ compilation.GetSymbolsWithName(s => s.Contains("Manager", OrdinalIgnoreCase))
-  ├─ Filter: kind match, not IsImplicitlyDeclared
-  ├─ Deduplicate: HashSet<"displayString|kind"> across projects
-  └─ Return List<SymbolResult>
+  ├─ exact=true:
+  │   ├─ compilation.GetSymbolsWithName(s => s == "Manager")
+  │   ├─ Filter: IsInSource, kind match
+  │   └─ Return first match with full detail
+  │
+  ├─ exact=false:
+  │   ├─ compilation.GetSymbolsWithName(s => s.Contains("Manager", OrdinalIgnoreCase))
+  │   ├─ Filter: IsInSource, kind match, not IsImplicitlyDeclared
+  │   ├─ Deduplicate: HashSet<"displayString|kind"> across projects
+  │   └─ Return List<SymbolResult>
 ```
 
 ### File Symbols
@@ -124,7 +132,7 @@ Traverses `GetAllNamedTypes`, collects `type.ContainingNamespace.ToDisplayString
 
 ## ProjectService
 
-**File:** `Services/ProjectService.cs` (162 LOC)
+**File:** `Services/ProjectService.cs` (140 LOC)
 **Dependencies:** WorkspaceManager
 **State:** None
 
@@ -139,9 +147,11 @@ Roslyn provides project name, documents, and references. For framework and outpu
 </PropertyGroup>
 ```
 
+`GetProjectInfoAsync` now returns a `ProjectInfo` record that includes a `PackageReferences` field (list of `PackageInfo`). The `ParsePackageReferences(XDocument?)` private helper extracts NuGet refs from `.csproj` XML, replacing the old separate `ListProjectReferencesAsync` and `ListPackageReferencesAsync` public methods.
+
 ### Package References
 
-Also parsed from `.csproj` XML:
+Parsed from `.csproj` XML by `ParsePackageReferences`:
 ```xml
 <PackageReference Include="Foo" Version="1.0" />
 <!-- or -->
@@ -197,18 +207,22 @@ GetFileContentAsync(filePath, startLine?, endLine?)
 
 ## HierarchyService
 
-**File:** `Services/HierarchyService.cs` (121 LOC)
+**File:** `Services/HierarchyService.cs` (108 LOC)
 **Dependencies:** WorkspaceManager, SymbolResolver
 **State:** None
 
-All hierarchy queries follow the same pattern:
+### Find Derived Types
+
+`FindDerivedTypesAsync` replaces the old `FindImplementationsAsync` and `FindSubclassesAsync` methods. It auto-detects whether the input is an interface or class via `TypeKind` and dispatches accordingly:
 
 ```
-1. Resolve input type/method via SymbolResolver
-2. Validate kind (interface for implementations, class for subclasses, etc.)
-3. Call SymbolFinder.FindXxxAsync(symbol, solution)
-4. Filter results to IsInSource only
-5. Build SymbolResult list
+FindDerivedTypesAsync(path, typeName, detail) → (List<SymbolResult>, string TypeKind)
+  │
+  ├─ Resolve type via SymbolResolver
+  ├─ TypeKind == Interface → SymbolFinder.FindImplementationsAsync
+  ├─ TypeKind == Class     → SymbolFinder.FindDerivedClassesAsync
+  ├─ Filter results to IsInSource only
+  └─ Return (List<SymbolResult>, TypeKind string)
 ```
 
 ### Type Hierarchy
@@ -226,13 +240,22 @@ GetTypeHierarchyAsync(path, "OrderService")
 
 ## ReferencesService
 
-**File:** `Services/ReferencesService.cs` (173 LOC)
+**File:** `Services/ReferencesService.cs` (155 LOC)
 **Dependencies:** WorkspaceManager, SymbolResolver
 **State:** None
 
-### Shared Implementation
+### Consolidated API
 
-`FindReferencesForSymbolAsync` is used by both `FindReferencesAsync` and `FindUsagesAsync`:
+Single public method with `mode` parameter:
+
+```
+FindReferencesAsync(path, symbolName, typeName?, projectScope?, detail, mode: "all"|"callers"|"usages")
+  │
+  ├─ mode = "callers" → FindCallersInternalAsync
+  └─ mode = "all" | "usages" → FindReferencesInternalAsync
+```
+
+### FindReferencesInternalAsync (private)
 
 ```
 SymbolFinder.FindReferencesAsync(symbol, solution)
@@ -247,10 +270,10 @@ SymbolFinder.FindReferencesAsync(symbol, solution)
   └─ Return List<ReferenceResult>
 ```
 
-### Callers
+### FindCallersInternalAsync (private)
 
 ```
-FindCallersAsync → SymbolFinder.FindCallersAsync(method, solution)
+SymbolFinder.FindCallersAsync(method, solution)
   │
   └─ Uses caller.CallingSymbol for ContainingSymbol (instead of GetEnclosingSymbol)
 ```

@@ -43,45 +43,39 @@ Or after publishing:
 }
 ```
 
-## Tools (26)
+## Tools (20)
 
-### Project Structure (6 tools)
+### Project Structure (4 tools)
 
 | Tool | Description |
 |------|-------------|
 | `list_projects` | List all projects in a solution with metadata |
-| `get_project_info` | Get detailed project metadata |
-| `list_project_references` | List project-to-project dependencies |
-| `list_package_references` | List NuGet packages (name + version) |
+| `get_project_info` | Get detailed project metadata including references and packages |
 | `list_source_files` | List all .cs files in a project |
 | `get_diagnostics` | Get compilation errors and warnings |
 
-### Symbol Search (5 tools)
+### Symbol Search (4 tools)
 
 | Tool | Description |
 |------|-------------|
-| `find_symbol` | Search by name (substring match), filter by kind |
+| `find_symbol` | Search by name (substring or exact match), filter by kind |
 | `get_file_symbols` | List all symbols in a file (depth=1 for members) |
 | `get_type_members` | List members of a type (methods, properties, etc.) |
-| `get_symbol_info` | Detailed info (signature, docs, attributes) |
 | `list_namespaces` | List all namespaces in a solution |
 
-### Type Hierarchy (4 tools)
+### Type Hierarchy (3 tools)
 
 | Tool | Description |
 |------|-------------|
-| `find_implementations` | Find classes implementing an interface |
-| `find_subclasses` | Find classes inheriting from a base class |
+| `find_derived_types` | Find implementations (interfaces) or subclasses (classes) |
 | `get_type_hierarchy` | Full inheritance chain (bases + interfaces) |
 | `find_overrides` | Find overrides of a virtual/abstract method |
 
-### References (3 tools)
+### References (1 tool)
 
 | Tool | Description |
 |------|-------------|
-| `find_references` | Find all references to a symbol |
-| `find_callers` | Find call sites for a method |
-| `find_usages` | Find where a type is used |
+| `find_references` | Find references, callers, or usages (via mode parameter) |
 
 ### Source Retrieval (2 tools)
 
