@@ -28,3 +28,6 @@ x86/
 ## OS
 .DS_Store
 Thumbs.db
+
+## Project docs (local only)
+claudedocs/
