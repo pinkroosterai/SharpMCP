@@ -24,14 +24,14 @@ public sealed class ReferenceTools
         [Description("Symbol name to find references for")] string symbolName,
         [Description("Optional containing type name (to disambiguate)")] string? typeName = null,
         [Description("'all' (default), 'callers' (method call sites only), or 'usages' (type usage sites)")] string mode = "all",
-        [Description("Optional project name to scope the search")] string? projectScope = null,
-        [Description("'compact' (default) or 'full' for detailed output with context")] string detail = "compact")
+        [Description("Optional project name to restrict search to")] string? projectName = null,
+        [Description("'compact' (default) = reference locations. 'full' = includes surrounding context lines.")] string detail = "compact")
     {
         try
         {
             var detailLevel = DetailLevelExtensions.Parse(detail);
             var results = await _referencesService.FindReferencesAsync(
-                solutionPath, symbolName, typeName, projectScope, detailLevel, mode);
+                solutionPath, symbolName, typeName, projectName, detailLevel, mode);
 
             if (results.Count == 0)
                 return $"No references found for '{symbolName}'.";

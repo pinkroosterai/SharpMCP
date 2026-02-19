@@ -30,7 +30,7 @@ public sealed class AnalysisTools
         }
     }
 
-    [McpServerTool(Name = "find_code_smells"), Description("Detect code smells across a solution: complexity issues (long methods, deep nesting, high cyclomatic complexity), design smells (god classes, data classes, too many dependencies), and inheritance smells (deep hierarchy, refused bequest). Results grouped by severity (critical/warning/info).")]
+    [McpServerTool(Name = "find_code_smells"), Description("Detect code smells across a solution. Complexity: long methods, deep nesting, high cyclomatic complexity, large classes, long parameter lists. Design: god classes, data classes, too many dependencies, middle man, feature envy (deep only). Inheritance: deep hierarchy, refused bequest, speculative generality. Results grouped by severity.")]
     public async Task<string> FindCodeSmells(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Filter: 'all', 'complexity', 'design', or 'inheritance' (default: 'all')")] string category = "all",

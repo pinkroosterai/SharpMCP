@@ -18,7 +18,7 @@ public sealed class RefactoringTools
         _signatureService = signatureService;
     }
 
-    [McpServerTool(Name = "rename_symbol"), Description("Rename a symbol (class, interface, method, property, etc.) and update all references across the solution. When renaming a type whose filename matches, the file is also renamed.")]
+    [McpServerTool(Name = "rename_symbol"), Description("Rename a symbol and update all references across the solution. Writes changes to disk. When renaming a type whose filename matches, the file is also renamed. Supported: classes, interfaces, methods, properties, fields, events.")]
     public async Task<string> RenameSymbol(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Current symbol name to rename")] string symbolName,
@@ -37,7 +37,7 @@ public sealed class RefactoringTools
         }
     }
 
-    [McpServerTool(Name = "extract_interface"), Description("Generate an interface from a class's public members. Optionally creates the interface file and adds it to the class declaration.")]
+    [McpServerTool(Name = "extract_interface"), Description("Generate an interface from a class's public non-static methods, properties, and events (excludes constructors/operators). Creates the interface file and modifies the class by default (set apply=false for preview only).")]
     public async Task<string> ExtractInterface(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("The class to extract an interface from")] string typeName,
@@ -55,7 +55,7 @@ public sealed class RefactoringTools
         }
     }
 
-    [McpServerTool(Name = "implement_interface"), Description("Add stub implementations (throw NotImplementedException) for unimplemented interface members on a class.")]
+    [McpServerTool(Name = "implement_interface"), Description("Add stub implementations (throw NotImplementedException) for unimplemented interface members on a class. Writes changes to disk.")]
     public async Task<string> ImplementInterface(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("The class that needs interface implementations")] string typeName,
@@ -72,7 +72,7 @@ public sealed class RefactoringTools
         }
     }
 
-    [McpServerTool(Name = "change_signature"), Description("Modify a method's parameter list (add, remove, reorder) and update all call sites across the solution.")]
+    [McpServerTool(Name = "change_signature"), Description("Modify a method's parameter list (add, remove, reorder) and update all call sites across the solution. Writes changes to disk.")]
     public async Task<string> ChangeSignature(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Method name to modify")] string methodName,

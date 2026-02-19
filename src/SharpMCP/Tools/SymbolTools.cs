@@ -18,13 +18,13 @@ public sealed class SymbolTools
         _formatter = formatter;
     }
 
-    [McpServerTool(Name = "find_symbol"), Description("Search for symbols by name. Use exact=true for precise lookup with detailed info, or substring matching (default) for broader search.")]
+    [McpServerTool(Name = "find_symbol"), Description("Search for symbols by name (substring match by default, or exact with exact=true). Filter by kind (class, method, etc.). Returns signatures and locations; use detail='full' for source bodies.")]
     public async Task<string> FindSymbol(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Symbol name or substring to search for")] string query,
         [Description("Optional kind filter: class, interface, method, property, field, enum, struct, event")] string? kind = null,
         [Description("true = exact name match, false = substring match (default)")] bool exact = false,
-        [Description("'compact' (default) or 'full' for detailed output including source and docs")] string detail = "compact")
+        [Description("'compact' (default) = signatures + locations. 'full' = includes source bodies, doc comments, and surrounding context.")] string detail = "compact")
     {
         try
         {
@@ -47,7 +47,7 @@ public sealed class SymbolTools
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Path to the source file (absolute or relative to solution)")] string filePath,
         [Description("Depth: 0 for types only, 1 to include members")] int depth = 0,
-        [Description("'compact' (default) or 'full' for detailed output")] string detail = "compact")
+        [Description("'compact' (default) = signatures + locations. 'full' = includes source bodies, doc comments, and surrounding context.")] string detail = "compact")
     {
         try
         {
@@ -69,7 +69,7 @@ public sealed class SymbolTools
     public async Task<string> GetTypeMembers(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Type name (simple or fully qualified)")] string typeName,
-        [Description("'compact' (default) or 'full' for detailed output including source")] string detail = "compact")
+        [Description("'compact' (default) = signatures + locations. 'full' = includes source bodies, doc comments, and surrounding context.")] string detail = "compact")
     {
         try
         {
@@ -87,7 +87,7 @@ public sealed class SymbolTools
         }
     }
 
-    [McpServerTool(Name = "list_namespaces"), Description("List all namespaces in a solution.")]
+    [McpServerTool(Name = "list_namespaces"), Description("List all source-defined namespaces in a solution (excludes namespaces from referenced assemblies).")]
     public async Task<string> ListNamespaces(
         [Description("Path to .sln or .csproj file")] string solutionPath)
     {

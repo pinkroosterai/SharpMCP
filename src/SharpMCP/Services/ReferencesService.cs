@@ -18,13 +18,13 @@ public sealed class ReferencesService
 
     public async Task<List<ReferenceResult>> FindReferencesAsync(
         string solutionPath, string symbolName, string? typeName = null,
-        string? projectScope = null, DetailLevel detail = DetailLevel.Compact,
+        string? projectName = null, DetailLevel detail = DetailLevel.Compact,
         string mode = "all")
     {
         return mode.ToLowerInvariant() switch
         {
             "callers" => await FindCallersInternalAsync(solutionPath, symbolName, typeName, detail),
-            _ => await FindReferencesInternalAsync(solutionPath, symbolName, typeName, projectScope, detail),
+            _ => await FindReferencesInternalAsync(solutionPath, symbolName, typeName, projectName, detail),
         };
     }
 

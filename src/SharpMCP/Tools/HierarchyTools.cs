@@ -22,7 +22,7 @@ public sealed class HierarchyTools
     public async Task<string> FindDerivedTypes(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Interface or base class name")] string typeName,
-        [Description("'compact' (default) or 'full' for detailed output")] string detail = "compact")
+        [Description("'compact' (default) = signatures + locations. 'full' = includes source bodies, doc comments, and surrounding context.")] string detail = "compact")
     {
         try
         {
@@ -61,12 +61,12 @@ public sealed class HierarchyTools
         }
     }
 
-    [McpServerTool(Name = "find_overrides"), Description("Find all overrides of a virtual/abstract method across the solution.")]
+    [McpServerTool(Name = "find_overrides"), Description("Find all overrides of a virtual/abstract method across the solution. The target method must be virtual, abstract, or override.")]
     public async Task<string> FindOverrides(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Type name containing the method")] string typeName,
         [Description("Method name to find overrides for")] string methodName,
-        [Description("'compact' (default) or 'full' for detailed output")] string detail = "compact")
+        [Description("'compact' (default) = signatures + locations. 'full' = includes source bodies, doc comments, and surrounding context.")] string detail = "compact")
     {
         try
         {
