@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.MSBuild;
 
 namespace SharpMCP.Services;
 
-public sealed class WorkspaceManager
+public sealed class WorkspaceManager : IDisposable
 {
     private readonly Dictionary<string, CachedWorkspace> _cache = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -125,6 +125,49 @@ public sealed class WorkspaceManager
         }
     }
 
+    /// <summary>
+    /// Applies changes, runs an optional post-apply action, then invalidates the cache — all under a single lock.
+    /// </summary>
+    public async Task ApplyChangesAndInvalidateAsync(string solutionPath, Solution newSolution, Action? postApplyAction = null)
+    {
+        var normalized = Path.GetFullPath(solutionPath);
+
+        await _lock.WaitAsync();
+        try
+        {
+            if (!_cache.TryGetValue(normalized, out var cached))
+                throw new InvalidOperationException("No workspace loaded for this solution path.");
+
+            if (!cached.Workspace.TryApplyChanges(newSolution))
+                throw new InvalidOperationException("Failed to apply changes to the workspace.");
+
+            postApplyAction?.Invoke();
+
+            cached.Workspace.Dispose();
+            _cache.Remove(normalized);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public void Dispose()
+    {
+        _lock.Wait();
+        try
+        {
+            foreach (var cached in _cache.Values)
+                cached.Workspace.Dispose();
+            _cache.Clear();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+        _lock.Dispose();
+    }
+
     private static Project FindProject(Solution solution, string? projectName)
     {
         if (projectName == null)
@@ -159,7 +202,10 @@ public sealed class WorkspaceManager
         try
         {
             var solutionDir = Path.GetDirectoryName(cached.NormalizedPath)!;
-            var latestWrite = Directory.EnumerateFiles(solutionDir, "*.cs", SearchOption.AllDirectories)
+            var csFiles = Directory.EnumerateFiles(solutionDir, "*.cs", SearchOption.AllDirectories);
+            var csprojFiles = Directory.EnumerateFiles(solutionDir, "*.csproj", SearchOption.AllDirectories);
+            var slnFiles = Directory.EnumerateFiles(solutionDir, "*.sln", SearchOption.TopDirectoryOnly);
+            var latestWrite = csFiles.Concat(csprojFiles).Concat(slnFiles)
                 .Select(f => File.GetLastWriteTimeUtc(f))
                 .DefaultIfEmpty(DateTime.MinValue)
                 .Max();

@@ -47,17 +47,13 @@ public sealed class SymbolFormatter
         var lines = new List<string>();
         foreach (var s in symbols)
         {
+            lines.Add($"  {s.Signature}  [{s.FilePath}:{s.Line}]");
             if (detail == DetailLevel.Full)
             {
-                lines.Add($"  {s.Signature}  [{s.FilePath}:{s.Line}]");
                 if (s.DocComment != null)
                     lines.Add($"    Doc: {s.DocComment}");
                 if (s.SourceBody != null)
                     lines.Add($"    Source:\n{Indent(s.SourceBody, 6)}");
-            }
-            else
-            {
-                lines.Add($"  {s.Signature}  [{s.FilePath}:{s.Line}]");
             }
         }
         return string.Join("\n", lines);

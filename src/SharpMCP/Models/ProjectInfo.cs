@@ -6,8 +6,8 @@ public record ProjectInfo(
     string TargetFramework,
     string OutputType,
     int SourceFileCount,
-    List<string> ProjectReferences,
-    List<PackageInfo> PackageReferences
+    IReadOnlyList<string> ProjectReferences,
+    IReadOnlyList<PackageInfo> PackageReferences
 );
 
 public record PackageInfo(string Name, string Version);

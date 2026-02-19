@@ -160,7 +160,6 @@ public sealed class InterfaceService
 
         // Insert before the closing brace
         var closeBrace = classDecl.CloseBraceToken;
-        var newRoot = root.InsertTokensBefore(closeBrace, Array.Empty<SyntaxToken>());
 
         // Use text-based insertion for reliability
         var sourceText = await syntaxTree.GetTextAsync();

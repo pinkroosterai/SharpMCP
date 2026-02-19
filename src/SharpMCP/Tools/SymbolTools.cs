@@ -46,13 +46,14 @@ public sealed class SymbolTools
     public async Task<string> GetFileSymbols(
         [Description("Path to .sln or .csproj file")] string solutionPath,
         [Description("Path to the source file (absolute or relative to solution)")] string filePath,
-        [Description("Depth: 0 for types only, 1 to include members")] int depth = 0,
+        [Description("0 = types only, 1 = include members (default: 0)")] int depth = 0,
         [Description("'compact' (default) = signatures + locations. 'full' = includes source bodies, doc comments, and surrounding context.")] string detail = "compact")
     {
         try
         {
+            depth = Math.Clamp(depth, 0, 1);
             var detailLevel = DetailLevelExtensions.Parse(detail);
-            var results = await _symbolService.GetFileSymbolsAsync(solutionPath, filePath, depth);
+            var results = await _symbolService.GetFileSymbolsAsync(solutionPath, filePath, depth, detailLevel);
             if (results.Count == 0)
                 return $"No symbols found in '{filePath}'.";
 

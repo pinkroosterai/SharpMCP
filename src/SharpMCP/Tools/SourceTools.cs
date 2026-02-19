@@ -38,6 +38,9 @@ public sealed class SourceTools
     {
         try
         {
+            if (startLine.HasValue && endLine.HasValue && startLine.Value > endLine.Value)
+                return $"Error: startLine ({startLine}) cannot be greater than endLine ({endLine}).";
+
             return await SourceService.GetFileContentAsync(filePath, startLine, endLine);
         }
         catch (Exception ex)

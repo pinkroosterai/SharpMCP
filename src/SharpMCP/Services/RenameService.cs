@@ -65,19 +65,13 @@ public sealed class RenameService
         var newSolution = await Renamer.RenameSymbolAsync(solution, symbol, options, newName);
 
         // Compute changed documents
-        var changedDocs = GetChangedDocuments(solution, newSolution);
+        var changedDocs = await GetChangedDocumentsAsync(solution, newSolution);
 
-        // Apply changes to disk
-        await _workspaceManager.ApplyChangesAsync(solutionPath, newSolution);
-
-        // Rename file on disk if needed
-        if (oldFilePath != null && newFilePath != null && File.Exists(oldFilePath))
-        {
-            File.Move(oldFilePath, newFilePath);
-        }
-
-        // Invalidate cache since files changed on disk (and possibly a file was renamed)
-        await _workspaceManager.InvalidateCacheAsync(solutionPath);
+        // Apply changes, rename file if needed, and invalidate cache — all under one lock
+        Action? postApply = (oldFilePath != null && newFilePath != null)
+            ? () => { if (File.Exists(oldFilePath)) File.Move(oldFilePath, newFilePath); }
+            : null;
+        await _workspaceManager.ApplyChangesAndInvalidateAsync(solutionPath, newSolution, postApply);
 
         // Build summary
         return BuildSummary(oldName, newName, changedDocs, solutionDir, oldFilePath, newFilePath);
@@ -113,7 +107,7 @@ public sealed class RenameService
                 $"Cannot rename '{symbol.Name}' — it is defined in metadata, not in source.");
     }
 
-    private static List<(string FilePath, DocumentId Id)> GetChangedDocuments(Solution oldSolution, Solution newSolution)
+    private static async Task<List<(string FilePath, DocumentId Id)>> GetChangedDocumentsAsync(Solution oldSolution, Solution newSolution)
     {
         var changed = new List<(string FilePath, DocumentId Id)>();
 
@@ -137,8 +131,8 @@ public sealed class RenameService
                 }
                 else
                 {
-                    var newText = newDoc.GetTextAsync().Result;
-                    var oldText = oldDoc.GetTextAsync().Result;
+                    var newText = await newDoc.GetTextAsync();
+                    var oldText = await oldDoc.GetTextAsync();
                     if (!newText.ContentEquals(oldText))
                     {
                         changed.Add((newDoc.FilePath ?? "(unknown)", docId));

@@ -244,7 +244,7 @@ public sealed class AnalysisService
         var total = types.Count + methods.Count + properties.Count + fields.Count;
 
         if (total == 0)
-            return $"No unused code found in {scopeName} (scope: {scope}).";
+            return $"No unused code found in {scopeName} (scope: {scope}).\nNote: public and protected symbols are excluded from analysis (they may be consumed externally).";
 
         var sb = new StringBuilder();
         sb.AppendLine($"Unused code in {scopeName} ({total} symbol(s)):");

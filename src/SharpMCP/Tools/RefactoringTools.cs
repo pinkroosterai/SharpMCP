@@ -28,6 +28,9 @@ public sealed class RefactoringTools
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(symbolName))
+                return "Error: symbolName cannot be empty or whitespace.";
+
             return await _renameService.RenameSymbolAsync(
                 solutionPath, symbolName, newName, typeName, includeStrings);
         }

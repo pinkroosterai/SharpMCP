@@ -61,17 +61,14 @@ public sealed class SymbolSearchService
                 }
 
                 results.Add(result);
-
-                // For exact match, return first source-defined match
-                if (exact)
-                    return results;
             }
         }
 
         return results.OrderBy(r => r.FilePath).ThenBy(r => r.Line).ToList();
     }
 
-    public async Task<List<SymbolResult>> GetFileSymbolsAsync(string solutionPath, string filePath, int depth = 0)
+    public async Task<List<SymbolResult>> GetFileSymbolsAsync(
+        string solutionPath, string filePath, int depth = 0, DetailLevel detail = DetailLevel.Compact)
     {
         var solution = await _workspaceManager.GetSolutionAsync(solutionPath);
         var solutionDir = Path.GetDirectoryName(Path.GetFullPath(solutionPath))!;
@@ -100,14 +97,28 @@ public sealed class SymbolSearchService
             if (semanticModel.GetDeclaredSymbol(typeDecl) is not INamedTypeSymbol typeSymbol)
                 continue;
 
-            results.Add(SymbolFormatter.BuildSymbolResult(typeSymbol, solutionDir));
+            var typeResult = SymbolFormatter.BuildSymbolResult(typeSymbol, solutionDir);
+            if (detail == DetailLevel.Full)
+            {
+                var docComment = SymbolFormatter.ExtractSummary(typeSymbol.GetDocumentationCommentXml());
+                var sourceBody = await SymbolFormatter.GetSourceBodyAsync(typeSymbol);
+                typeResult = typeResult with { DocComment = docComment, SourceBody = sourceBody };
+            }
+            results.Add(typeResult);
 
             if (depth > 0)
             {
                 foreach (var member in typeSymbol.GetMembers())
                 {
                     if (member.IsImplicitlyDeclared) continue;
-                    results.Add(SymbolFormatter.BuildSymbolResult(member, solutionDir));
+                    var memberResult = SymbolFormatter.BuildSymbolResult(member, solutionDir);
+                    if (detail == DetailLevel.Full)
+                    {
+                        var docComment = SymbolFormatter.ExtractSummary(member.GetDocumentationCommentXml());
+                        var sourceBody = await SymbolFormatter.GetSourceBodyAsync(member);
+                        memberResult = memberResult with { DocComment = docComment, SourceBody = sourceBody };
+                    }
+                    results.Add(memberResult);
                 }
             }
         }

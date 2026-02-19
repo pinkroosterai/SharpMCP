@@ -92,7 +92,7 @@ public sealed class SignatureService
         };
 
         // Build new parameter list for declaration
-        var newDeclParamText = BuildNewParameterListText(newParams);
+        var newDeclParamText = newParams;
         var declDocument = solution.GetDocumentIdsWithFilePath(declTree.FilePath).FirstOrDefault();
 
         if (declDocument != null && declTree.FilePath != null)
@@ -120,24 +120,51 @@ public sealed class SignatureService
             var root = await tree.GetRootAsync();
             var text = (await tree.GetTextAsync()).ToString();
 
-            // If this is the same file as the declaration, re-read it since we may have modified it
-            if (changedFiles.Contains(filePath))
-                text = await File.ReadAllTextAsync(filePath);
-
             // Collect all invocations in this file, sorted by position descending (to avoid offset shifts)
             var invocations = new List<(int Start, int End, string NewArgs)>();
 
-            foreach (var location in fileGroup.OrderByDescending(l => l.SourceSpan.Start))
+            if (changedFiles.Contains(filePath))
             {
-                var node = root.FindNode(location.SourceSpan);
-                var invocation = node.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
-                if (invocation == null) continue;
+                // Same file as declaration — re-read and re-parse since spans have shifted
+                text = await File.ReadAllTextAsync(filePath);
+                var newTree = CSharpSyntaxTree.ParseText(text, path: filePath);
+                root = await newTree.GetRootAsync();
 
-                var argList = invocation.ArgumentList;
-                var newArgText = BuildNewArgumentListText(
-                    argList, method.Parameters, paramsToAdd, paramsToRemove, newOrder);
+                // Find invocations by method name in the re-parsed tree
+                var matchingInvocations = root.DescendantNodes()
+                    .OfType<InvocationExpressionSyntax>()
+                    .Where(inv =>
+                    {
+                        var name = inv.Expression switch
+                        {
+                            MemberAccessExpressionSyntax ma => ma.Name.Identifier.ValueText,
+                            IdentifierNameSyntax id => id.Identifier.ValueText,
+                            _ => null
+                        };
+                        return name == method.Name;
+                    });
 
-                invocations.Add((argList.SpanStart, argList.Span.End, $"({newArgText})"));
+                foreach (var invocation in matchingInvocations)
+                {
+                    var argList = invocation.ArgumentList;
+                    var newArgText = BuildNewArgumentListText(
+                        argList, method.Parameters, paramsToAdd, paramsToRemove, newOrder);
+                    invocations.Add((argList.SpanStart, argList.Span.End, $"({newArgText})"));
+                }
+            }
+            else
+            {
+                foreach (var location in fileGroup.OrderByDescending(l => l.SourceSpan.Start))
+                {
+                    var node = root.FindNode(location.SourceSpan);
+                    var invocation = node.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
+                    if (invocation == null) continue;
+
+                    var argList = invocation.ArgumentList;
+                    var newArgText = BuildNewArgumentListText(
+                        argList, method.Parameters, paramsToAdd, paramsToRemove, newOrder);
+                    invocations.Add((argList.SpanStart, argList.Span.End, $"({newArgText})"));
+                }
             }
 
             // Apply changes from end to start to preserve positions
@@ -307,11 +334,6 @@ public sealed class SignatureService
         }
 
         return string.Join(", ", parts);
-    }
-
-    private static string BuildNewParameterListText(string newParams)
-    {
-        return newParams;
     }
 
     private static string BuildNewArgumentListText(

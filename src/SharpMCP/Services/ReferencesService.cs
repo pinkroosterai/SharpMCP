@@ -24,15 +24,30 @@ public sealed class ReferencesService
         return mode.ToLowerInvariant() switch
         {
             "callers" => await FindCallersInternalAsync(solutionPath, symbolName, typeName, detail),
+            "usages" => await FindUsagesInternalAsync(solutionPath, symbolName, projectName, detail),
             _ => await FindReferencesInternalAsync(solutionPath, symbolName, typeName, projectName, detail),
         };
     }
 
     private async Task<List<ReferenceResult>> FindReferencesInternalAsync(
         string solutionPath, string symbolName, string? typeName,
-        string? projectScope, DetailLevel detail)
+        string? projectName, DetailLevel detail)
     {
         var symbol = await _symbolResolver.ResolveSymbolAsync(solutionPath, symbolName, typeName);
+        return await FindReferencesForSymbolAsync(solutionPath, symbol, projectName, detail);
+    }
+
+    private async Task<List<ReferenceResult>> FindUsagesInternalAsync(
+        string solutionPath, string symbolName,
+        string? projectName, DetailLevel detail)
+    {
+        var type = await _symbolResolver.ResolveTypeAsync(solutionPath, symbolName);
+        return await FindReferencesForSymbolAsync(solutionPath, type, projectName, detail);
+    }
+
+    private async Task<List<ReferenceResult>> FindReferencesForSymbolAsync(
+        string solutionPath, ISymbol symbol, string? projectName, DetailLevel detail)
+    {
         var solution = await _workspaceManager.GetSolutionAsync(solutionPath);
         var solutionDir = Path.GetDirectoryName(Path.GetFullPath(solutionPath))!;
 
@@ -45,8 +60,8 @@ public sealed class ReferencesService
             {
                 var document = location.Document;
 
-                if (projectScope != null &&
-                    !string.Equals(document.Project.Name, projectScope, StringComparison.OrdinalIgnoreCase))
+                if (projectName != null &&
+                    !string.Equals(document.Project.Name, projectName, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 var filePath = document.FilePath ?? "(unknown)";
@@ -68,11 +83,9 @@ public sealed class ReferencesService
                     contextAfter = GetContextLines(sourceText, lineSpan.StartLinePosition.Line, 2);
                 }
 
-                var root = await document.GetSyntaxRootAsync();
                 var semanticModel = await document.GetSemanticModelAsync();
-                if (root != null && semanticModel != null)
+                if (semanticModel != null)
                 {
-                    var node = root.FindNode(location.Location.SourceSpan);
                     var enclosing = semanticModel.GetEnclosingSymbol(location.Location.SourceSpan.Start);
                     if (enclosing != null)
                         containingSymbol = enclosing.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
