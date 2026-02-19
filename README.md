@@ -43,7 +43,7 @@ Or after publishing:
 }
 ```
 
-## Tools (20)
+## Tools (26)
 
 ### Project Structure (6 tools)
 
@@ -89,6 +89,22 @@ Or after publishing:
 |------|-------------|
 | `get_source` | Get source code for a specific symbol |
 | `get_file_content` | Get file content with line numbers |
+
+### Refactoring (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `rename_symbol` | Rename a symbol and update all references |
+| `extract_interface` | Generate an interface from a class's public members |
+| `implement_interface` | Add stub implementations for interface members |
+| `change_signature` | Modify method parameters and update call sites |
+
+### Analysis (2 tools)
+
+| Tool | Description |
+|------|-------------|
+| `find_unused_code` | Find unreferenced symbols across the solution |
+| `find_code_smells` | Detect code smells (complexity, design, inheritance) grouped by severity |
 
 ## Common Parameters
 
