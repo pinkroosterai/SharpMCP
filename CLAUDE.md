@@ -16,8 +16,8 @@ dotnet run --project src/SharpMCP
 Single .NET 9 console app using stdio MCP transport.
 
 ```
-Tools/ (5 classes)     → Thin MCP tool layer, handles input/output
-Services/ (6 classes)  → Business logic using Roslyn APIs
+Tools/ (6 classes)     → Thin MCP tool layer, handles input/output
+Services/ (7 classes)  → Business logic using Roslyn APIs
 Formatting/ (2 classes)→ Symbol/reference → text conversion
 Models/ (5 files)      → Shared DTOs (records)
 Program.cs             → Host bootstrap, DI registration
@@ -27,6 +27,7 @@ Key components:
 - **WorkspaceManager**: Loads solutions via MSBuildWorkspace, caches compilations, auto-invalidates on file changes
 - **SymbolResolver**: Finds types/symbols by name across all projects
 - **SymbolFormatter**: Converts Roslyn ISymbol data to compact text output
+- **RenameService**: Renames symbols via Roslyn Renamer and applies changes to disk
 
 ## Conventions
 

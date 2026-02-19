@@ -76,6 +76,55 @@ public sealed class WorkspaceManager
         return FindProject(solution, projectName);
     }
 
+    /// <summary>
+    /// Applies a modified solution (e.g. from Renamer) to disk and updates the cache.
+    /// </summary>
+    public async Task ApplyChangesAsync(string solutionPath, Solution newSolution)
+    {
+        var normalized = Path.GetFullPath(solutionPath);
+
+        await _lock.WaitAsync();
+        try
+        {
+            if (!_cache.TryGetValue(normalized, out var cached))
+                throw new InvalidOperationException("No workspace loaded for this solution path.");
+
+            if (!cached.Workspace.TryApplyChanges(newSolution))
+                throw new InvalidOperationException("Failed to apply changes to the workspace.");
+
+            // Update cache with the new solution state
+            _cache[normalized] = new CachedWorkspace(
+                cached.Workspace, cached.Workspace.CurrentSolution,
+                normalized, DateTime.UtcNow, DateTime.UtcNow);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Invalidates the cache for a solution, forcing a reload on next access.
+    /// </summary>
+    public async Task InvalidateCacheAsync(string solutionPath)
+    {
+        var normalized = Path.GetFullPath(solutionPath);
+
+        await _lock.WaitAsync();
+        try
+        {
+            if (_cache.TryGetValue(normalized, out var cached))
+            {
+                cached.Workspace.Dispose();
+                _cache.Remove(normalized);
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     private static Project FindProject(Solution solution, string? projectName)
     {
         if (projectName == null)

@@ -26,6 +26,7 @@ builder.Services.AddSingleton<SymbolSearchService>();
 builder.Services.AddSingleton<SourceService>();
 builder.Services.AddSingleton<HierarchyService>();
 builder.Services.AddSingleton<ReferencesService>();
+builder.Services.AddSingleton<RenameService>();
 
 // Configure MCP server
 builder.Services
